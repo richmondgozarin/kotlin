@@ -16,8 +16,12 @@
 
 package org.jetbrains.kotlin.gradle.internal
 
+import com.android.build.gradle.AppExtension
 import com.android.build.gradle.BaseExtension
+import com.android.build.gradle.LibraryExtension
 import com.android.build.gradle.api.AndroidSourceSet
+import com.android.build.gradle.internal.variant.BaseVariantData
+import com.android.build.gradle.internal.variant.TestVariantData
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.UnknownDomainObjectException
@@ -25,7 +29,6 @@ import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.AbstractCompile
 import org.jetbrains.kotlin.gradle.plugin.KotlinGradleSubplugin
 import org.jetbrains.kotlin.gradle.plugin.SubpluginOption
-import org.jetbrains.kotlin.gradle.plugin.android.AndroidGradleWrapper
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.w3c.dom.Document
 import java.io.File
@@ -58,32 +61,90 @@ class AndroidSubplugin : KotlinGradleSubplugin<KotlinCompile> {
             javaSourceSet: SourceSet?
     ): List<SubpluginOption> {
         val androidExtension = project.extensions.getByName("android") as? BaseExtension ?: return emptyList()
-        val sourceSets = androidExtension.sourceSets
-
         val pluginOptions = arrayListOf<SubpluginOption>()
 
-        val mainSourceSet = sourceSets.getByName("main")
-        val manifestFile = mainSourceSet.manifest.srcFile
-        val applicationPackage = getApplicationPackageFromManifest(manifestFile) ?: run {
-            project.logger.warn(
-                    "Application package name is not present in the manifest file (${manifestFile.absolutePath})")
-            ""
-        }
-        pluginOptions += SubpluginOption("package", applicationPackage)
+        val mainSourceSet = androidExtension.sourceSets.getByName("main")
+        pluginOptions += SubpluginOption("package", getApplicationPackage(project, mainSourceSet))
 
-        fun addVariant(sourceSet: AndroidSourceSet) {
-            pluginOptions += SubpluginOption("variant", sourceSet.name + ';' +
-                    sourceSet.res.srcDirs.joinToString(";") { it.absolutePath })
+        fun addVariant(name: String, resDirectories: List<File>, isDeprecated: Boolean = false) {
+            pluginOptions += SubpluginOption("variant", buildString {
+                if (isDeprecated) {
+                    append("deprecated:")
+                }
+
+                append(name)
+                append(';')
+                resDirectories.joinTo(this, separator = ";") { it.canonicalPath }
+            })
         }
 
-        addVariant(mainSourceSet)
-
-        val flavorSourceSets = AndroidGradleWrapper.getProductFlavorsSourceSets(androidExtension).filterNotNull()
-        for (sourceSet in flavorSourceSets) {
-            addVariant(sourceSet)
+        fun addSourceSetAsVariant(name: String) {
+            val sourceSet = androidExtension.sourceSets.findByName(name) ?: return
+            val srcDirs = sourceSet.res.srcDirs.toList()
+            if (srcDirs.isNotEmpty()) {
+                addVariant(sourceSet.name, srcDirs)
+            }
         }
+
+        val resDirectoriesForAllVariants = mutableListOf<List<File>>()
+        if (androidExtension is AppExtension) {
+            for (variant in androidExtension.applicationVariants) {
+                resDirectoriesForAllVariants += variant.mergeResources.rawInputFolders.toList()
+            }
+        } else if (androidExtension is LibraryExtension) {
+            for (variant in androidExtension.libraryVariants) {
+                resDirectoriesForAllVariants += variant.mergeResources.rawInputFolders.toList()
+            }
+        }
+
+        val commonResDirectories = getCommonResDirectories(resDirectoriesForAllVariants)
+
+        addVariant("main", commonResDirectories.toList())
+
+        val currentVariantData = if (variantData is TestVariantData) {
+            variantData.testedVariantData as? BaseVariantData<*>
+        } else {
+            variantData as? BaseVariantData<*>
+        }
+
+        if (currentVariantData != null) {
+            addSourceSetAsVariant(currentVariantData.variantConfiguration.buildType.name)
+
+            val flavorName = currentVariantData.variantConfiguration.flavorName
+            if (flavorName.isNotEmpty()) {
+                addSourceSetAsVariant(flavorName)
+            }
+
+            addSourceSetAsVariant(currentVariantData.name)
+        }
+
+        project.logger.warn("Android Extensions for ${currentVariantData!!.name}: ${pluginOptions.joinToString("\n") { it.key + " = " + it.value }}\n\n")
 
         return pluginOptions
+    }
+
+    private fun getCommonResDirectories(resDirectories: List<List<File>>): Set<File> {
+        var common = resDirectories.firstOrNull()?.toSet() ?: return emptySet()
+
+        for (resDirs in resDirectories.drop(1)) {
+            common = common.intersect(resDirs)
+        }
+
+        return common
+    }
+
+    private fun getApplicationPackage(project: Project, mainSourceSet: AndroidSourceSet): String {
+        val manifestFile = mainSourceSet.manifest.srcFile
+        val applicationPackage = getApplicationPackageFromManifest(manifestFile)
+
+        if (applicationPackage == null) {
+            project.logger.warn("Application package name is not present in the manifest file " +
+                    "(${manifestFile.absolutePath})")
+
+            return ""
+        } else {
+            return applicationPackage
+        }
     }
 
     private fun getApplicationPackageFromManifest(manifestFile: File): String? {

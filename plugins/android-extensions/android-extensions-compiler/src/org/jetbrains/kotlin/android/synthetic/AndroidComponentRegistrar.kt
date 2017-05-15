@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.extensions.StorageComponentContainerContributor
 import org.jetbrains.kotlin.resolve.TargetPlatform
 import org.jetbrains.kotlin.resolve.jvm.extensions.PackageFragmentProviderExtension
 import org.jetbrains.kotlin.resolve.jvm.platform.JvmPlatform
+import org.jetbrains.kotlin.android.synthetic.AndroidCommandLineProcessor.Companion.DEPRECATED_NAME_PREFIX
 
 object AndroidConfigurationKeys {
     val VARIANT: CompilerConfigurationKey<List<String>> = CompilerConfigurationKey.create<List<String>>("Android build variant")
@@ -53,6 +54,8 @@ class AndroidCommandLineProcessor : CommandLineProcessor {
 
         val VARIANT_OPTION: CliOption = CliOption("variant", "<name;path>", "Android build variant", allowMultipleOccurrences = true)
         val PACKAGE_OPTION: CliOption = CliOption("package", "<fq name>", "Application package")
+
+        val DEPRECATED_NAME_PREFIX = "deprecated:"
     }
 
     override val pluginId: String = ANDROID_COMPILER_PLUGIN_ID
@@ -69,7 +72,6 @@ class AndroidCommandLineProcessor : CommandLineProcessor {
 }
 
 class AndroidComponentRegistrar : ComponentRegistrar {
-
     override fun registerProjectComponents(project: MockProject, configuration: CompilerConfiguration) {
         val applicationPackage = configuration.get(AndroidConfigurationKeys.PACKAGE)
         val variants = configuration.get(AndroidConfigurationKeys.VARIANT)?.mapNotNull { parseVariant(it) } ?: emptyList()
@@ -89,7 +91,14 @@ class AndroidComponentRegistrar : ComponentRegistrar {
     private fun parseVariant(s: String): AndroidVariant? {
         val parts = s.split(';')
         if (parts.size < 2) return null
-        return AndroidVariant(parts[0], parts.drop(1))
+
+        val rawName = parts[0]
+        val resDirectories = parts.drop(1)
+
+        val isDeprecated = rawName.startsWith(DEPRECATED_NAME_PREFIX)
+        val name = if (isDeprecated) rawName.substring(DEPRECATED_NAME_PREFIX.length) else rawName
+
+        return AndroidVariant(name, resDirectories, isDeprecated)
     }
 }
 

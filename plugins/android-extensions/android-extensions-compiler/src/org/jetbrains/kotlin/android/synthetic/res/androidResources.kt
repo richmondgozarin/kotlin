@@ -29,7 +29,7 @@ import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.isValidJavaFqName
 import org.jetbrains.kotlin.serialization.deserialization.findClassAcrossModuleDependencies
 
-class AndroidVariant(val name: String, val resDirectories: List<String>) {
+class AndroidVariant(val name: String, val resDirectories: List<String>, val isDeprecated: Boolean = false) {
     val packageName: String = name
     val isMainVariant: Boolean
         get() = name == "main"
