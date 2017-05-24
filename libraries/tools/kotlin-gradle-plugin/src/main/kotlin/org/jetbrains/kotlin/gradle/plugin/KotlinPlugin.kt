@@ -24,11 +24,8 @@ import org.gradle.api.tasks.compile.AbstractCompile
 import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.com.intellij.openapi.util.io.FileUtil
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptionsImpl
-import org.jetbrains.kotlin.gradle.internal.AnnotationProcessingManager
-import org.jetbrains.kotlin.gradle.internal.Kapt3GradleSubplugin
-import org.jetbrains.kotlin.gradle.internal.Kapt3KotlinGradleSubplugin
+import org.jetbrains.kotlin.gradle.internal.*
 import org.jetbrains.kotlin.gradle.internal.Kapt3KotlinGradleSubplugin.Companion.getKaptClasssesDir
-import org.jetbrains.kotlin.gradle.internal.initKapt
 import org.jetbrains.kotlin.gradle.plugin.android.AndroidGradleWrapper
 import org.jetbrains.kotlin.gradle.tasks.*
 import org.jetbrains.kotlin.gradle.utils.ParsedGradleVersion
@@ -129,6 +126,8 @@ internal class Kotlin2JvmSourceSetProcessor(
                         project, kotlinTask, javaTask as JavaCompile, null, sourceSet)
 
                 var kotlinAfterJavaTask: KotlinCompile? = null
+
+                checkKapt1Usage(project)
 
                 if (!Kapt3GradleSubplugin.isEnabled(project) && aptConfiguration.allDependencies.size > 1) {
                     javaTask.dependsOn(aptConfiguration.buildDependencies)
@@ -395,6 +394,9 @@ internal open class KotlinAndroidPlugin(
     ) {
         val logger = project.logger
         val subpluginEnvironment = loadSubplugins(project)
+
+        checkAndroidAnnotationProcessorDependencyUsage(project)
+        checkKapt1Usage(project)
 
         for (variantData in variantDataList) {
             if (AndroidGradleWrapper.isJackEnabled(variantData)) {

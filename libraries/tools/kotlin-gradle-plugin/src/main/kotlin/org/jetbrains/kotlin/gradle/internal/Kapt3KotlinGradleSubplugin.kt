@@ -26,6 +26,8 @@ import org.gradle.api.artifacts.Configuration
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.AbstractCompile
 import org.gradle.api.tasks.compile.JavaCompile
+import org.jetbrains.kotlin.gradle.internal.Kapt3KotlinGradleSubplugin.Companion.KAPT_ARTIFACT_NAME
+import org.jetbrains.kotlin.gradle.internal.Kapt3KotlinGradleSubplugin.Companion.KAPT_GROUP_NAME
 import org.jetbrains.kotlin.gradle.plugin.*
 import org.jetbrains.kotlin.gradle.plugin.android.AndroidGradleWrapper
 import org.jetbrains.kotlin.gradle.tasks.CompilerPluginOptions
@@ -50,6 +52,9 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
         private val VERBOSE_OPTION_NAME = "kapt.verbose"
 
         val MAIN_KAPT_CONFIGURATION_NAME = "kapt"
+
+        val KAPT_GROUP_NAME = "org.jetbrains.kotlin"
+        val KAPT_ARTIFACT_NAME = "kotlin-annotation-processing"
 
         fun getKaptConfigurationName(sourceSetName: String): String {
             return if (sourceSetName != "main")
@@ -325,6 +330,41 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
         get() = variantConfiguration.sortedSourceProviders
 
     override fun getCompilerPluginId() = "org.jetbrains.kotlin.kapt3"
-    override fun getGroupName() = "org.jetbrains.kotlin"
-    override fun getArtifactName() = "kotlin-annotation-processing"
+    override fun getGroupName() = KAPT_GROUP_NAME
+    override fun getArtifactName() = KAPT_ARTIFACT_NAME
+}
+
+private fun Configuration.getValidDependencies() = allDependencies
+        .filter { it.group != null && it.name != null && it.version != null }
+        .distinct()
+
+internal fun checkAndroidAnnotationProcessorDependencyUsage(project: Project) {
+    val isKapt3Enabled = Kapt3GradleSubplugin.isEnabled(project)
+
+    val androidAPDependencies = project.configurations
+            .filter { it.name == "annotationProcessor"
+                    || (it.name.endsWith("AnnotationProcessor") && !it.name.startsWith("_")) }
+            .flatMap { it.getValidDependencies() }
+
+    if (androidAPDependencies.isNotEmpty()) {
+        val artifactsRendered = androidAPDependencies.joinToString { "'${it.group}:${it.name}:${it.version}'" }
+        val andApplyKapt = if (isKapt3Enabled) "" else " and apply the kapt plugin: \"apply plugin: 'kotlin-kapt'\""
+        project.logger.warn("${project.name}: " +
+                "'androidProcessor' dependencies won't be recognized as kapt annotation processors. " +
+                "Please change the configuration name to 'kapt' for these artifacts: $artifactsRendered$andApplyKapt.")
+    }
+}
+
+internal fun checkKapt1Usage(project: Project) {
+    val isKapt3Enabled = Kapt3GradleSubplugin.isEnabled(project)
+
+    val kaptDependencies = project.configurations
+            .filter { it.name.startsWith("kapt") }
+            .flatMap { it.getValidDependencies() }
+            .filter { it.group != KAPT_GROUP_NAME || it.name != KAPT_ARTIFACT_NAME }
+
+    if (!isKapt3Enabled && kaptDependencies.isNotEmpty()) {
+        project.logger.warn("${project.name}: " +
+                "Original kapt is deprecated. Please add \"apply plugin: 'kotlin-kapt'\" to your build.gradle.")
+    }
 }
