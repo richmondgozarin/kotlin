@@ -26,7 +26,6 @@ import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.AbstractCompile
 import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.gradle.plugin.*
-import org.jetbrains.kotlin.gradle.plugin.android.AndroidGradleWrapper
 import org.jetbrains.kotlin.gradle.tasks.CompilerPluginOptions
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.ByteArrayOutputStream
@@ -48,7 +47,10 @@ abstract class KaptVariantData<T>(val variantData: T) {
     abstract val sourceProviders: Iterable<SourceProvider>
     abstract fun addJavaSourceFoldersToModel(generatedFilesDir: File)
     abstract val annotationProcessorOptions: Map<String, String>?
-    abstract fun wireKaptTask(project: Project, task: KaptTask, kotlinTask: KotlinCompile, javaTask: AbstractCompile)
+    abstract fun registerGeneratedJavaSource(
+            project: Project,
+            kaptTask: KaptTask,
+            javaTask: AbstractCompile)
 }
 
 // Subplugin for the Kotlin Gradle plugin
@@ -159,7 +161,12 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
                 kaptVariantData, sourceSetName, kaptExtension, kaptClasspath)
 
         val kaptGenerateStubsTask = context.createKaptGenerateStubsTask()
-        context.createKaptKotlinTask(kaptGenerateStubsTask)
+        val kaptTask = context.createKaptKotlinTask()
+
+        val preKaptTasks = (kotlinCompile.dependsOn + javaCompile.dependsOn).filter { it !== kotlinCompile }
+        kaptGenerateStubsTask.dependsOn(*preKaptTasks.toTypedArray())
+        kaptTask.dependsOn(kaptGenerateStubsTask)
+        kotlinCompile.dependsOn(kaptTask)
 
         /** Plugin options are applied to kapt*Compile inside [createKaptKotlinTask] */
         return emptyList()
@@ -255,7 +262,7 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
         }
     }
 
-    private fun Kapt3SubpluginContext.createKaptKotlinTask(kaptGenerateStubsTask: KaptGenerateStubsTask) {
+    private fun Kapt3SubpluginContext.createKaptKotlinTask(): KaptTask {
         val kaptTask = project.tasks.create(getKaptTaskName("kapt"), KaptTask::class.java)
         kaptTask.kotlinCompileTask = kotlinCompile
 
@@ -276,17 +283,17 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
             sourcesFromKotlinTask + stubSources
         }
 
-        kaptTask.dependsOn(kaptGenerateStubsTask)
-        kotlinCompile.dependsOn(kaptTask)
         kotlinCompile.source(sourcesOutputDir, kotlinSourcesOutputDir)
 
         if (kaptVariantData != null) {
-            kaptVariantData.wireKaptTask(project, kaptTask, kotlinCompile, javaCompile)
-        } else {
-            wireKaptTaskForJavaProject(kaptTask, kotlinCompile, javaCompile)
+            kaptVariantData.registerGeneratedJavaSource(project, kaptTask, javaCompile)
+        }
+        else {
+            registerGeneratedJavaSource(kaptTask, javaCompile)
         }
 
         buildAndAddOptionsTo(kaptTask.pluginOptions, aptMode = "apt")
+        return kaptTask
     }
 
     private fun Kapt3SubpluginContext.createKaptGenerateStubsTask(): KaptGenerateStubsTask {
@@ -300,8 +307,6 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
         kaptTask.destinationDir = getKaptIncrementalDataDir()
         kaptTask.mapClasspath { kotlinCompile.classpath }
         kaptTask.generatedSourcesDir = sourcesOutputDir
-
-        kaptTask.dependsOn(*(javaCompile.dependsOn.filter { it !== kotlinCompile }.toTypedArray()))
 
         buildAndAddOptionsTo(kaptTask.pluginOptions, aptMode = "stubs")
 
@@ -335,7 +340,6 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
     override fun getArtifactName() = "kotlin-annotation-processing"
 }
 
-internal fun wireKaptTaskForJavaProject(task: KaptTask, kotlinTask: KotlinCompile, javaTask: AbstractCompile) {
-    task.dependsOn(*(javaTask.dependsOn.filter { it !== kotlinTask && it != kotlinTask.name }.toTypedArray()))
-    javaTask.source(task.destinationDir)
+internal fun registerGeneratedJavaSource(kaptTask: KaptTask, javaTask: AbstractCompile) {
+    javaTask.source(kaptTask.destinationDir)
 }
