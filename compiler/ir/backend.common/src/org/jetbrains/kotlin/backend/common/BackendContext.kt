@@ -24,4 +24,12 @@ interface BackendContext {
     val builtIns: KotlinBuiltIns
     val irBuiltIns: IrBuiltIns
     val sharedVariablesManager: SharedVariablesManager
+
+    fun log(message: String)
+
+    fun log(message: () -> String) {
+        //if (phase?.verbose ?: false) {
+            println(message())
+        //}
+    }
 }
