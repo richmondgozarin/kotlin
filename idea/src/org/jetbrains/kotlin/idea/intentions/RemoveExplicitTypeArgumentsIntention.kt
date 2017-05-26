@@ -40,6 +40,22 @@ class RemoveExplicitTypeArgumentsIntention : SelfTargetingOffsetIndependentInten
         "Remove explicit type arguments"
 ) {
     companion object {
+
+        private fun KtCallExpression.hasExplicitExpectedType(): Boolean {
+            // todo Check with expected type for other expressions
+            // If always use expected type from trace there is a problem with nested calls:
+            // the expression type for them can depend on their explicit type arguments (via outer call),
+            // therefore we should resolve outer call with erased type arguments for inner call
+            val parent = parent
+            return when (parent) {
+                is KtProperty -> parent.initializer == this && parent.typeReference != null
+                is KtDeclarationWithBody -> parent.bodyExpression == this
+                is KtReturnExpression -> true
+                is KtValueArgument -> (parent.parent.parent as? KtCallExpression)?.hasExplicitExpectedType() ?: false
+                else -> false
+            }
+        }
+
         fun isApplicableTo(element: KtTypeArgumentList, approximateFlexible: Boolean): Boolean {
             val callExpression = element.parent as? KtCallExpression ?: return false
             if (callExpression.typeArguments.isEmpty()) return false
@@ -51,17 +67,7 @@ class RemoveExplicitTypeArgumentsIntention : SelfTargetingOffsetIndependentInten
             val originalCall = callExpression.getResolvedCall(context) ?: return false
             val untypedCall = CallWithoutTypeArgs(originalCall.call)
 
-            // todo Check with expected type for other expressions
-            // If always use expected type from trace there is a problem with nested calls:
-            // the expression type for them can depend on their explicit type arguments (via outer call),
-            // therefore we should resolve outer call with erased type arguments for inner call
-            val parent = callExpression.parent
-            val expectedTypeIsExplicitInCode = when (parent) {
-                is KtProperty -> parent.initializer == callExpression && parent.typeReference != null
-                is KtDeclarationWithBody -> parent.bodyExpression == callExpression
-                is KtReturnExpression -> true
-                else -> false
-            }
+            val expectedTypeIsExplicitInCode = callExpression.hasExplicitExpectedType()
             val expectedType = if (expectedTypeIsExplicitInCode) {
                 context[BindingContext.EXPECTED_EXPRESSION_TYPE, callExpression] ?: TypeUtils.NO_EXPECTED_TYPE
             }
