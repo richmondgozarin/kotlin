@@ -31,7 +31,8 @@ import org.jetbrains.kotlin.resolve.calls.util.DelegatingCall
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.TypeUtils
-import org.jetbrains.kotlin.types.checker.KotlinTypeChecker
+import org.jetbrains.kotlin.types.isError
+import org.jetbrains.kotlin.types.typeUtil.isSubtypeOf
 
 class RemoveExplicitTypeArgumentsInspection : IntentionBasedInspection<KtTypeArgumentList>(RemoveExplicitTypeArgumentsIntention::class)
 
@@ -85,12 +86,12 @@ class RemoveExplicitTypeArgumentsIntention : SelfTargetingOffsetIndependentInten
             val args = originalCall.typeArguments
             val newArgs = resolutionResults.resultingCall.typeArguments
 
-            fun equalTypes(type1: KotlinType, type2: KotlinType): Boolean {
-                return if (approximateFlexible) {
-                    KotlinTypeChecker.DEFAULT.equalTypes(type1, type2)
+            fun equalTypes(explicitArgType: KotlinType, implicitArgType: KotlinType): Boolean {
+                return !implicitArgType.isError && if (approximateFlexible) {
+                    explicitArgType.isSubtypeOf(implicitArgType)
                 }
                 else {
-                    type1 == type2
+                    explicitArgType == implicitArgType
                 }
             }
 
