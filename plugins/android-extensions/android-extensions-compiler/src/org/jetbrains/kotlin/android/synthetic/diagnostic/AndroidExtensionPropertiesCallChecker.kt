@@ -22,10 +22,14 @@ import org.jetbrains.kotlin.android.synthetic.diagnostic.ErrorsAndroid.*
 import org.jetbrains.kotlin.android.synthetic.res.AndroidSyntheticProperty
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
 import org.jetbrains.kotlin.diagnostics.DiagnosticSink
+import org.jetbrains.kotlin.lexer.KtTokens
+import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtExpression
+import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.resolve.calls.checkers.CallChecker
 import org.jetbrains.kotlin.resolve.calls.checkers.CallCheckerContext
 import org.jetbrains.kotlin.resolve.calls.model.ResolvedCall
+import org.jetbrains.kotlin.types.TypeUtils
 
 class AndroidExtensionPropertiesCallChecker : CallChecker {
     override fun check(resolvedCall: ResolvedCall<*>, reportOn: PsiElement, context: CallCheckerContext) {
@@ -38,6 +42,7 @@ class AndroidExtensionPropertiesCallChecker : CallChecker {
         with(context.trace) {
             checkUnresolvedWidgetType(reportOn, androidSyntheticProperty)
             checkDeprecated(reportOn, containingPackage)
+            checkPartiallyDefinedResource(resolvedCall, androidSyntheticProperty, context)
         }
     }
 
@@ -53,5 +58,40 @@ class AndroidExtensionPropertiesCallChecker : CallChecker {
 
         val warning = if (type.contains('.')) SYNTHETIC_UNRESOLVED_WIDGET_TYPE else SYNTHETIC_INVALID_WIDGET_TYPE
         report(warning.on(expression, type))
+    }
+
+    private fun DiagnosticSink.checkPartiallyDefinedResource(
+            resolvedCall: ResolvedCall<*>,
+            property: AndroidSyntheticProperty,
+            context: CallCheckerContext
+    ) {
+        if (!property.resource.partiallyDefined) return
+        val calleeExpression = resolvedCall.call.calleeExpression ?: return
+
+        val expectedType = context.resolutionContext.expectedType
+        if (!TypeUtils.noExpectedType(expectedType) && !expectedType.isMarkedNullable) {
+            report(DOT_CALL_ON_PARTIALLY_DEFINED_RESOURCE.on(calleeExpression))
+            return
+        }
+
+        val outermostQualifiedExpression = findLeftOutermostQualifiedExpression(calleeExpression) ?: return
+        val usage = outermostQualifiedExpression.parent
+
+        if (usage is KtQualifiedExpression
+            && usage.receiverExpression == outermostQualifiedExpression
+            && usage.operationSign == KtTokens.DOT
+        ) {
+            report(DOT_CALL_ON_PARTIALLY_DEFINED_RESOURCE.on(calleeExpression))
+        }
+    }
+
+    private fun findLeftOutermostQualifiedExpression(calleeExpression: KtExpression?): KtElement? {
+        val parent = calleeExpression?.parent ?: return null
+
+        if (parent is KtQualifiedExpression && parent.selectorExpression == calleeExpression) {
+            return findLeftOutermostQualifiedExpression(parent)
+        }
+
+        return calleeExpression
     }
 }
