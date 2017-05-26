@@ -92,4 +92,11 @@
       <option name="FOREGROUND" value="20999d" />
     </value>
   </option>
+  <option name="ANDROID_EXTENSIONS_PROPERTY_CALL">
+    <value>
+      <option name="FOREGROUND" value="A1C9CB" />
+      <option name="FONT_TYPE" value="3" />
+      <option name="EFFECT_TYPE" value="0" />
+    </value>
+  </option>
 </list>
