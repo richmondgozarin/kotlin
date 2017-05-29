@@ -168,16 +168,16 @@ internal class KotlinGradleBuildServices private constructor(gradle: Gradle): Bu
         if (!shouldReportMemoryUsage) return null
 
         log.lifecycle(FORCE_SYSTEM_GC_MESSAGE)
-        val gcCountBefore = gcCount
+        val gcCountBefore = getGcCount()
         System.gc()
-        while (gcCount == gcCountBefore) {}
+        while (getGcCount() == gcCountBefore) {}
 
         val rt = Runtime.getRuntime()
         return (rt.totalMemory() - rt.freeMemory()) / 1024
     }
 
-    private val gcCount: Long
-        get() = ManagementFactory.getGarbageCollectorMXBeans().sumByLong { Math.max(0, it.collectionCount) }
+    private fun getGcCount(): Long =
+            ManagementFactory.getGarbageCollectorMXBeans().sumByLong { Math.max(0, it.collectionCount) }
 }
 
 
