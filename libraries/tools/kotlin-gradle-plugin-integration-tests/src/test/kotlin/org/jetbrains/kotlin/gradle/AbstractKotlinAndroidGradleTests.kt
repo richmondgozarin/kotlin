@@ -149,7 +149,7 @@ fun getSomething() = 10
             assertSuccessful()
             assertCompiledKotlinSources(project.relativize(
                     androidModuleKt,
-                    baseApplicationKt,
+                    //baseApplicationKt,
                     useBuildConfigJavaKt
             ))
         }
