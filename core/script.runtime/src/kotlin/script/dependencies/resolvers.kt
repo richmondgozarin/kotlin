@@ -18,6 +18,7 @@
 
 package kotlin.script.dependencies
 
+import sun.reflect.generics.reflectiveObjects.NotImplementedException
 import java.io.File
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
@@ -26,14 +27,22 @@ interface ScriptDependenciesResolver {
 
     enum class ReportSeverity { ERROR, WARNING, INFO, DEBUG }
 
+    @Deprecated(replaceWith = ReplaceWith("resolve"), message = "Replace with the resolve function with callback")
     fun resolve(script: ScriptContents,
                 environment: Map<String, Any?>?,
                 report: (ReportSeverity, String, ScriptContents.Position?) -> Unit,
                 previousDependencies: KotlinScriptExternalDependencies?
     ): Future<KotlinScriptExternalDependencies?> = PseudoFuture(null)
+
+    fun resolve(script: ScriptContents,
+                environment: Map<String, Any?>?,
+                report: (ReportSeverity, String, ScriptContents.Position?) -> Unit,
+                onResult: (ValueOrError<KotlinScriptExternalDependencies?>) -> Unit
+    ): ResultOrAsync<KotlinScriptExternalDependencies?> = ResultOrAsync.Result(ValueOrError.Error(NotImplementedException()))
 }
 
 class BasicScriptDependenciesResolver : ScriptDependenciesResolver
+
 interface ScriptContents {
 
     data class Position(val line: Int, val col: Int)
@@ -51,4 +60,14 @@ class PseudoFuture<T>(private val value: T): Future<T> {
     override fun cancel(p0: Boolean): Boolean = false
     override fun isDone(): Boolean = true
     override fun isCancelled(): Boolean = false
+}
+
+sealed class ValueOrError<out R> {
+    class Value<out R>(val value: R): ValueOrError<R>()
+    class Error(val error: Throwable): ValueOrError<Nothing>()
+}
+
+sealed class ResultOrAsync<out R> {
+    class Result<out R>(val result: ValueOrError<R>): ResultOrAsync<R>()
+    class Async: ResultOrAsync<Nothing>()
 }
