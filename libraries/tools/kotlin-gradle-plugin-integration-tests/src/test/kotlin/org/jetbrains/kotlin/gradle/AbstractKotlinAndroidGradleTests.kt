@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.gradle
 
+import org.gradle.util.VersionNumber
 import org.jetbrains.kotlin.gradle.util.getFileByName
 import org.jetbrains.kotlin.gradle.util.modify
 import org.junit.Test
@@ -7,7 +8,7 @@ import java.io.File
 
 
 class KotlinAndroidGradleCLIOnly : AbstractKotlinAndroidGradleTests(gradleVersion = "3.3", androidGradlePluginVersion = "2.3.0")
-class KotlinAndroid30GradleCLIOnly : AbstractKotlinAndroidGradleTests(gradleVersion = "4.0-milestone-1", androidGradlePluginVersion = "3.0.0-alpha2")
+class KotlinAndroid30GradleCLIOnly : AbstractKotlinAndroidGradleTests(gradleVersion = "4.0-rc-1", androidGradlePluginVersion = "3.0.0-alpha2")
 
 class KotlinAndroidWithJackGradleCLIOnly : AbstractKotlinAndroidWithJackGradleTests(gradleVersion = "3.3", androidGradlePluginVersion = "2.3.+")
 
@@ -46,9 +47,10 @@ abstract class AbstractKotlinAndroidGradleTests(
             // After 3.0 AGP test only modules contain a compile<Variant>Kotlin task for each variant.
             tasks.addAll(findTasksByPattern(":Test:compile[\\w\\d]+Kotlin"))
             assertTasksExecuted(tasks)
-            if (androidGradlePluginVersion != "3.0.0-alpha2") {
+            if (VersionNumber.parse(androidGradlePluginVersion) < VersionNumber.parse("3.0.0-alpha1")) {
                 // known bug: new AGP does not run Kotlin tests
                 // https://issuetracker.google.com/issues/38454212
+                // TODO: remove when the bug is fixed
                 assertContains("InternalDummyTest PASSED")
             }
             checkKotlinGradleBuildServices()
@@ -76,8 +78,11 @@ abstract class AbstractKotlinAndroidGradleTests(
         // Execute 'assembleAndroidTest' first, without 'build' side effects
         project.build("assembleAndroidTest") {
             assertSuccessful()
-            assertContains(":copyFlavor1DebugKotlinClasses")
-            assertContains(":copyFlavor2DebugKotlinClasses")
+            if (VersionNumber.parse(androidGradlePluginVersion) < VersionNumber.parse("3.0.0-alpha1")) {
+                // with the new AGP we don't need copy classes tasks
+                assertContains(":copyFlavor1DebugKotlinClasses")
+                assertContains(":copyFlavor2DebugKotlinClasses")
+            }
         }
     }
 
