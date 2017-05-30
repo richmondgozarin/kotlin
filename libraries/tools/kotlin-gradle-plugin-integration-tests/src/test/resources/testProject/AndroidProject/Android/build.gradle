@@ -22,27 +22,17 @@ android {
         targetSdkVersion 22
     }
 
-    buildTypes {
-        jnidebug.initWith(buildTypes.debug)
-        jnidebug {
-            applicationIdSuffix ".jnidebug"
-            jniDebuggable true
-        }
-    }
-
-    flavorDimensions "custom"
-
+    flavorDimensions "myFlavor"
     productFlavors {
         flavor1 {
             applicationId "com.example.flavor1"
             versionCode 20
-            dimension "custom"
+            dimension "myFlavor"
         }
-
         flavor2 {
             applicationId "com.example.flavor2"
             minSdkVersion 14
-            dimension "custom"
+            dimension "myFlavor"
         }
     }
 
