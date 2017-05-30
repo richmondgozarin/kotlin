@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.extensions.AnnotationBasedExtension
 import org.jetbrains.kotlin.extensions.DeclarationAttributeAltererExtension
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
+import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtModifierListOwner
 import org.jetbrains.kotlin.resolve.BindingContext
 
@@ -37,6 +38,8 @@ abstract class AbstractAllOpenDeclarationAttributeAltererExtension : Declaration
         val ANNOTATIONS_FOR_TESTS = listOf("AllOpen", "AllOpen2", "test.AllOpen")
     }
 
+    protected open fun recordModalityWasAltered(element: KtElement, isAltered: Boolean) {}
+
     override fun refineDeclarationModality(
             modifierListOwner: KtModifierListOwner,
             declaration: DeclarationDescriptor?,
@@ -45,21 +48,25 @@ abstract class AbstractAllOpenDeclarationAttributeAltererExtension : Declaration
             bindingContext: BindingContext
     ): Modality? {
         if (currentModality != Modality.FINAL) {
+            recordModalityWasAltered(modifierListOwner, false)
             return null
         }
 
         if (modifierListOwner.hasModifier(KtTokens.PRIVATE_KEYWORD) && modifierListOwner is KtCallableDeclaration) {
+            recordModalityWasAltered(modifierListOwner, false)
             return null
         }
 
         val descriptor = declaration as? ClassDescriptor ?: containingDeclaration ?: return null
         if (descriptor.hasSpecialAnnotation(modifierListOwner)) {
+            recordModalityWasAltered(modifierListOwner, true)
             return if (modifierListOwner.hasModifier(KtTokens.FINAL_KEYWORD))
                 Modality.FINAL // Explicit final
             else
                 Modality.OPEN
         }
 
+        recordModalityWasAltered(modifierListOwner, false)
         return null
     }
 }

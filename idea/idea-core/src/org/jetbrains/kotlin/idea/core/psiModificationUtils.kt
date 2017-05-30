@@ -20,10 +20,8 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiWhiteSpace
 import com.intellij.psi.impl.source.codeStyle.CodeEditUtil
 import com.intellij.psi.util.PsiTreeUtil
-import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
-import org.jetbrains.kotlin.descriptors.ClassDescriptor
-import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
-import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
+import org.jetbrains.kotlin.descriptors.*
+import org.jetbrains.kotlin.extensions.MODALITY_IS_ALTERED
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptor
 import org.jetbrains.kotlin.idea.util.IdeDescriptorRenderers
@@ -233,7 +231,53 @@ fun KtModifierListOwner.canBeProtected(): Boolean {
     }
 }
 
+fun KtClass.isInheritable(): Boolean {
+    return when (this.getModalityFromDescriptor()) {
+        KtTokens.ABSTRACT_KEYWORD, KtTokens.OPEN_KEYWORD, KtTokens.SEALED_KEYWORD -> true
+        else -> false
+    }
+}
+
+fun KtDeclaration.isOverridable(): Boolean {
+    val parent = parent
+    if (!(parent is KtClassBody || parent is KtParameterList)) return false
+
+    val klass = if (parent.parent is KtPrimaryConstructor)
+        parent.parent.parent as? KtClass
+    else
+        parent.parent as? KtClass
+    if (klass == null || (!klass.isInheritable() && !klass.isEnum())) return false
+
+    if (this.hasModifier(KtTokens.PRIVATE_KEYWORD)) {
+        // 'private' is incompatible with 'open'
+        return false
+    }
+
+    return when (getModalityFromDescriptor()) {
+        KtTokens.ABSTRACT_KEYWORD, KtTokens.OPEN_KEYWORD -> true
+        else -> false
+    }
+}
+
+fun KtDeclaration.getModalityFromDescriptor(): KtModifierKeywordToken? {
+    val descriptor = this.resolveToDescriptor(BodyResolveMode.PARTIAL)
+    if (descriptor is MemberDescriptor) {
+        return when (descriptor.modality) {
+            Modality.FINAL -> KtTokens.FINAL_KEYWORD
+            Modality.SEALED -> KtTokens.SEALED_KEYWORD
+            Modality.OPEN -> KtTokens.OPEN_KEYWORD
+            Modality.ABSTRACT -> KtTokens.ABSTRACT_KEYWORD
+        }
+    }
+
+    return null
+}
+
 fun KtDeclaration.implicitModality(): KtModifierKeywordToken {
+    if (getUserData(MODALITY_IS_ALTERED) == true) {
+        getModalityFromDescriptor()?.let { return it }
+    }
+
     if (this is KtClassOrObject) {
         if (this is KtClass && this.isInterface()) return KtTokens.ABSTRACT_KEYWORD
         return KtTokens.FINAL_KEYWORD
