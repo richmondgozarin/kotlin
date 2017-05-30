@@ -52,7 +52,9 @@ class RemoveExplicitTypeArgumentsIntention : SelfTargetingOffsetIndependentInten
                 is KtProperty -> parent.initializer == this && parent.typeReference != null
                 is KtDeclarationWithBody -> parent.bodyExpression == this
                 is KtReturnExpression -> true
-                is KtValueArgument -> (parent.parent.parent as? KtCallExpression)?.hasExplicitExpectedType() ?: false
+                is KtValueArgument -> (parent.parent.parent as? KtCallExpression)?.let {
+                    it.typeArgumentList != null || it.hasExplicitExpectedType()
+                }?: false
                 else -> false
             }
         }
@@ -88,7 +90,7 @@ class RemoveExplicitTypeArgumentsIntention : SelfTargetingOffsetIndependentInten
 
             fun equalTypes(explicitArgType: KotlinType, implicitArgType: KotlinType): Boolean {
                 return !implicitArgType.isError && if (approximateFlexible) {
-                    explicitArgType.isSubtypeOf(implicitArgType)
+                    implicitArgType.isSubtypeOf(explicitArgType)
                 }
                 else {
                     explicitArgType == implicitArgType
