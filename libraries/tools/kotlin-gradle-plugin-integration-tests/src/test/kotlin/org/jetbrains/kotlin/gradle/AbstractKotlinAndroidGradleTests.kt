@@ -7,7 +7,7 @@ import java.io.File
 
 
 class KotlinAndroidGradleCLIOnly : AbstractKotlinAndroidGradleTests(gradleVersion = "3.3", androidGradlePluginVersion = "2.3.0")
-class KotlinAndroid25GradleCLIOnly : AbstractKotlinAndroidGradleTests(gradleVersion = "4.0-milestone-1", androidGradlePluginVersion = "3.0.0-alpha2")
+class KotlinAndroid30GradleCLIOnly : AbstractKotlinAndroidGradleTests(gradleVersion = "4.0-milestone-1", androidGradlePluginVersion = "3.0.0-alpha2")
 
 class KotlinAndroidWithJackGradleCLIOnly : AbstractKotlinAndroidWithJackGradleTests(gradleVersion = "3.3", androidGradlePluginVersion = "2.3.+")
 
@@ -38,16 +38,14 @@ abstract class AbstractKotlinAndroidGradleTests(
                 }
             }
         }
-        for (flavor in flavors) {
-            tasks.add(":Test:compile${flavor}DebugKotlin")
-        }
-
-        val allTasksExecuted = tasks.map { "Executing task '$it'" }.toTypedArray()
-        val allTasksUpToDate = tasks.map { it + " UP-TO-DATE" }.toTypedArray()
 
         project.build("build", "assembleAndroidTest") {
             assertSuccessful()
-            assertContains(*allTasksExecuted)
+            // Before 3.0 AGP test only modules are compiled only against one flavor and one build type,
+            // and contain only the compileDebugKotlin task.
+            // After 3.0 AGP test only modules contain a compile<Variant>Kotlin task for each variant.
+            tasks.addAll(findTasksByPattern(":Test:compile[\\w\\d]+Kotlin"))
+            assertTasksExecuted(tasks)
             if (androidGradlePluginVersion != "3.0.0-alpha2") {
                 // known bug: new AGP does not run Kotlin tests
                 // https://issuetracker.google.com/issues/38454212
@@ -59,14 +57,14 @@ abstract class AbstractKotlinAndroidGradleTests(
         // Run the build second time, assert everything is up-to-date
         project.build("build") {
             assertSuccessful()
-            assertContains(*allTasksUpToDate)
+            assertTasksUpToDate(tasks)
         }
 
         // Run the build third time, re-run tasks
 
         project.build("build", "--rerun-tasks") {
             assertSuccessful()
-            assertContains(*allTasksExecuted)
+            assertTasksExecuted(tasks)
             checkKotlinGradleBuildServices()
         }
     }

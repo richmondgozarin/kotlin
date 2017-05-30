@@ -26,4 +26,6 @@ android {
             dimension "myFlavor"
         }
     }
+
+    publishNonDefault true
 }
