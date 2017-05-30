@@ -30,15 +30,19 @@ android {
         }
     }
 
+    flavorDimensions "custom"
+
     productFlavors {
         flavor1 {
             applicationId "com.example.flavor1"
             versionCode 20
+            dimension "custom"
         }
 
         flavor2 {
             applicationId "com.example.flavor2"
             minSdkVersion 14
+            dimension "custom"
         }
     }
 

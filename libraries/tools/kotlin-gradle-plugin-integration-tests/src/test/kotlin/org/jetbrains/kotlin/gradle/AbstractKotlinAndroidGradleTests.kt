@@ -7,6 +7,7 @@ import java.io.File
 
 
 class KotlinAndroidGradleCLIOnly : AbstractKotlinAndroidGradleTests(gradleVersion = "3.3", androidGradlePluginVersion = "2.3.0")
+class KotlinAndroid25GradleCLIOnly : AbstractKotlinAndroidGradleTests(gradleVersion = "4.0-milestone-1", androidGradlePluginVersion = "3.0.0-alpha1")
 
 class KotlinAndroidWithJackGradleCLIOnly : AbstractKotlinAndroidWithJackGradleTests(gradleVersion = "3.3", androidGradlePluginVersion = "2.3.+")
 
